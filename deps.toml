@@ -1,0 +1,25 @@
+depsversion = "0.0.0"
+
+name = "piot/udp-connections-client-c"
+version = "0.0.0"
+
+[[dependencies]]
+name = "piot/flood-c"
+version = "*"
+
+[[dependencies]]
+name = "piot/udp-transport"
+version = "*"
+
+[[dependencies]]
+name = "piot/udp-connections-serialize"
+version = "*"
+
+[[dependencies]]
+name = "piot/secure-random-c"
+version = "*"
+
+
+[[development]]
+name = "piot/udp-client-c"
+version = "*"
