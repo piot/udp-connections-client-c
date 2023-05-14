@@ -31,7 +31,7 @@ static int transportSend(void* _self, const uint8_t* data, size_t octetCount)
 
     fldOutStreamWriteOctets(&outStream, data, octetCount);
 
-    return udpTransportSend(&self->underlyingTransport, buf, outStream.pos);
+    return datagramTransportSend(&self->underlyingTransport, buf, outStream.pos);
 }
 
 /// Handle incoming Challenge Response from server
@@ -173,11 +173,11 @@ static int inPacket(UdpConnectionsClient* self, FldInStream* inStream, uint8_t* 
 /// @param data
 /// @param maxOctetCount
 /// @return
-static int transportReceive(void* _self, uint8_t* data, size_t maxOctetCount)
+static ssize_t transportReceive(void* _self, uint8_t* data, size_t maxOctetCount)
 {
     UdpConnectionsClient* self = (UdpConnectionsClient*) _self;
 
-    int octetsFound = udpTransportReceive(&self->underlyingTransport, data, maxOctetCount);
+    int octetsFound = datagramTransportReceive(&self->underlyingTransport, data, maxOctetCount);
     if (octetsFound <= 0) {
         return octetsFound;
     }
@@ -212,7 +212,7 @@ static int transportReceive(void* _self, uint8_t* data, size_t maxOctetCount)
 /// @param transport
 /// @param log
 /// @return
-int udpConnectionsClientInit(UdpConnectionsClient* self, UdpTransportInOut transport, Clog log)
+int udpConnectionsClientInit(UdpConnectionsClient* self, DatagramTransport transport, Clog log)
 {
     self->log = log;
     self->underlyingTransport = transport;
@@ -290,7 +290,7 @@ static int sendPacket(UdpConnectionsClient* self)
     }
 
     if (outStream.pos > 0) {
-        return udpTransportSend(&self->underlyingTransport, buf, outStream.pos);
+        return datagramTransportSend(&self->underlyingTransport, buf, outStream.pos);
     }
 
     return result;

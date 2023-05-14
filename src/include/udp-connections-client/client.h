@@ -7,7 +7,7 @@
 
 #include <clog/clog.h>
 #include <udp-connections-serialize/serialize.h>
-#include <udp-transport/udp_transport.h>
+#include <datagram-transport/transport.h>
 
 typedef enum UdpConnectionsClientPhase {
     UdpConnectionsClientPhaseIdle,
@@ -17,8 +17,8 @@ typedef enum UdpConnectionsClientPhase {
 } UdpConnectionsClientPhase;
 
 typedef struct UdpConnectionsClient {
-    UdpTransportInOut underlyingTransport;
-    UdpTransportInOut transport;
+    DatagramTransport underlyingTransport;
+    DatagramTransport transport;
     UdpConnectionsClientPhase phase;
     UdpConnectionsSerializeClientNonce nonce;
     UdpConnectionsSerializeServerChallenge receivedServerChallenge;
@@ -27,7 +27,7 @@ typedef struct UdpConnectionsClient {
     Clog log;
 } UdpConnectionsClient;
 
-int udpConnectionsClientInit(UdpConnectionsClient* self, UdpTransportInOut transport, Clog log);
+int udpConnectionsClientInit(UdpConnectionsClient* self, DatagramTransport transport, Clog log);
 int udpConnectionsClientUpdate(UdpConnectionsClient* self);
 
 #endif

@@ -57,7 +57,7 @@ target_include_directories(udp_connections_client
 target_include_directories(udp_connections_client
                            PUBLIC ${DEPS}piot/tiny-libc/src/include)
 target_include_directories(udp_connections_client
-                           PUBLIC ${DEPS}piot/udp-transport/src/include)
+                           PUBLIC ${DEPS}piot/datagram-transport-c/src/include)
 target_include_directories(
   udp_connections_client
   PUBLIC ${DEPS}piot/udp-connections-serialize/src/include)

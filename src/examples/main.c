@@ -19,7 +19,7 @@ static int udpSend(void* _self, const uint8_t* data, size_t size)
     return udpClientSend(self, data, size);
 }
 
-static int udpReceive(void* _self, uint8_t* data, size_t size)
+static ssize_t udpReceive(void* _self, uint8_t* data, size_t size)
 {
     UdpClientSocket* self = _self;
     return udpClientReceive(self, data, size);
@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
 
     udpClientInit(&socket, "127.0.0.1", 27000);
 
-    UdpTransportInOut udpClientTransport;
+    DatagramTransport udpClientTransport;
     udpClientTransport.self = &socket;
     udpClientTransport.send = udpSend;
     udpClientTransport.receive = udpReceive;
@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
     while (true) {
         udpConnectionsClientUpdate(&connectionsClient);
 
-        int receivedOctetCount = udpTransportReceive(&connectionsClient.transport, buf, 1200);
+        int receivedOctetCount = datagramTransportReceive(&connectionsClient.transport, buf, 1200);
         if (receivedOctetCount > 0) {
             CLOG_INFO("got reply: %d '%s'", receivedOctetCount, buf)
         }
@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
         if (connectionsClient.phase == UdpConnectionsClientPhaseConnected) {
             tc_snprintf(buf, MAX_BUF_SIZE, "Hello %04X tick", tickId);
             CLOG_INFO("sending '%s' %d", buf, tc_strlen(buf) + 1)
-            udpTransportSend(&connectionsClient.transport, buf, tc_strlen(buf) + 1);
+            datagramTransportSend(&connectionsClient.transport, buf, tc_strlen(buf) + 1);
             tickId++;
         }
 

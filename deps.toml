@@ -8,7 +8,7 @@ name = "piot/flood-c"
 version = "*"
 
 [[dependencies]]
-name = "piot/udp-transport"
+name = "piot/datagram-transport-c"
 version = "*"
 
 [[dependencies]]
