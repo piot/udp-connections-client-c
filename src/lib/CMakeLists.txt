@@ -1,66 +1,131 @@
-cmake_minimum_required(VERSION 3.17)
-project(udp_connections_client C)
+cmake_minimum_required(VERSION 3.16.3)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_FLAGS "-std=c99")
+set(CMAKE_C_EXTENSIONS false)
+
+
+# --- Detect CMake build type, compiler and operating system ---
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  message("detected debug build")
   set(isDebug TRUE)
 else()
-  message("no debug")
+  message("detected release build")
   set(isDebug FALSE)
 endif()
 
-if(isDebug)
-  message("Debug build detected")
-  add_compile_definitions(CONFIGURATION_DEBUG TYRAN_CONFIGURATION_DEBUG)
-  set(CONFIGURATION_DEBUG 1)
+
+if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+  set(COMPILER_NAME "clang")
+  set(COMPILER_CLANG 1)
+elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  set(COMPILER_NAME "gcc")
+  set(COMPILER_GCC 1)
+elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+  set(COMPILER_NAME "msvc")
+  set(COMPILER_MSVC 1)
 endif()
 
-set(DEPS ../../deps/)
+message("detected compiler: '${CMAKE_C_COMPILER_ID}' (${COMPILER_NAME})")
 
-file(GLOB lib_src FOLLOW_SYMLINKS "*.c")
+set(useSanitizers false)
 
-add_library(udp_connections_client STATIC ${lib_src})
+if(useSanitizers)
+  message("using sanitizers")
+  set(sanitizers "-fsanitize=address")
+endif()
 
-target_compile_options(
-  udp_connections_client
-  PRIVATE -Wall
-          -Wextra
-          -Wshadow
-          -Wstrict-aliasing
-          -ansi
-          -pedantic
-          -Wno-declaration-after-statement
-          -Wno-extra-semi-stmt
-          -Wno-undef
-          -Wno-unused-variable
-          -Wno-unused-parameter
-          -Wno-padded
-          -Werror=implicit-function-declaration
-          -Werror=incompatible-pointer-types
-          -Werror=missing-prototypes
-          -Werror=int-conversion
-          -Werror=return-type
-          -Werror=incompatible-function-pointer-types)
+
+# --- Library ---
+
+
+file(GLOB lib_src FOLLOW_SYMLINKS "./*.c")
+
+
+add_library(udp-connections-client STATIC ${lib_src})
+
+
+if(APPLE)
+  target_compile_definitions(udp-connections-client PRIVATE TORNADO_OS_MACOS)
+  set(OS_MACOS 1)
+elseif(UNIX)
+  target_compile_definitions(udp-connections-client PRIVATE TORNADO_OS_LINUX)
+  set(OS_LINUX 1)
+elseif(WIN32)
+  target_compile_definitions(udp-connections-client PRIVATE TORNADO_OS_WINDOWS)
+  set(OS_WINDOWS 1)
+endif()
+
+if(isDebug)
+  message("Setting definitions based on debug")
+  target_compile_definitions(udp-connections-client PRIVATE CONFIGURATION_DEBUG)
+endif()
+
+
+function(unixlike)
+endfunction()
+
+if(OS_LINUX)
+  message("Linux Detected!")
+  unixlike()
+elseif(OS_MACOS)
+  message("MacOS detected!")
+  unixlike()
+elseif(OS_WINDOWS)
+  message("Windows detected!")
+endif()
+
+target_include_directories(udp-connections-client PUBLIC ../include)
 
 if(COMPILER_CLANG)
   target_compile_options(
-    udp_connections_client PRIVATE -Wmost -Weverything
-                                   -Werror=missing-variable-declarations)
+    udp-connections-client
+    PRIVATE -Weverything
+            -Werror
+            -Wno-padded # the order of the fields in struct can matter (ABI)
+            -Wno-declaration-after-statement # must be bug in clang? shows up
+                                             # even if std=c99
+            -Wno-unsafe-buffer-usage # unclear why it fails on clang-16
+            -Wno-unknown-warning-option # support newer clang versions, e.g. clang-16
+            -Wno-disabled-macro-expansion # bug in emscripten compiler?
+            ${sanitizers})
+elseif(COMPILER_GCC)
+target_compile_options(
+    udp-connections-client
+    PRIVATE -Wall
+            -Wextra
+            -Wpedantic
+            -Werror
+            -Wno-padded # the order of the fields in struct can matter (ABI)
+            ${sanitizers})
+elseif(COMPILER_MSVC)
+  target_compile_options(
+    udp-connections-client
+    PRIVATE /Wall
+            /WX
+            # /F 5000000 # stack size
+            /wd4820 # bytes padding added after data member
+            /wd4668 # bug in winioctl.h (is not defined as a preprocessor macro, replacing with '0' for '#if/#elif')
+            /wd5045 # Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+            /wd4005 # Bug in ntstatus.h (macro redefinition)
+          )
+else()
+  target_compile_options(udp-connections-client PRIVATE -Wall)
 endif()
 
-target_include_directories(udp_connections_client
-                           PUBLIC ${DEPS}piot/flood-c/src/include)
-target_include_directories(udp_connections_client
-                           PUBLIC ${DEPS}piot/clog/src/include)
-target_include_directories(udp_connections_client
-                           PUBLIC ${DEPS}piot/tiny-libc/src/include)
-target_include_directories(udp_connections_client
-                           PUBLIC ${DEPS}piot/datagram-transport-c/src/include)
-target_include_directories(
-  udp_connections_client
-  PUBLIC ${DEPS}piot/udp-connections-serialize/src/include)
-target_include_directories(udp_connections_client
-                           PUBLIC ${DEPS}piot/secure-random-c/src/include)
-target_include_directories(udp_connections_client PUBLIC ../include)
+
+target_link_libraries(udp-connections-client PUBLIC flood PUBLIC datagram-transport PUBLIC udp-connections-serialize PUBLIC secure-random)
+
+
+if(useSanitizers)
+  target_link_libraries(udp-connections-client PRIVATE ${sanitizers})
+endif()
+
+if(NOT isDebug)
+  message("optimize!")
+  target_compile_options(udp-connections-client PRIVATE -O3)
+endif()
+
+if (NOT MSVC)
+target_link_libraries(udp-connections-client PRIVATE m)
+endif()
