@@ -5,16 +5,17 @@
 #include <clog/clog.h>
 #include <flood/in_stream.h>
 #include <flood/out_stream.h>
+#include <inttypes.h>
 #include <secure-random/secure_random.h>
 #include <udp-connections-client/client.h>
 #include <udp-connections-serialize/client_in.h>
 #include <udp-connections-serialize/client_out.h>
 
 /// Send packet to underlying transport with the out packet header.
-/// @param _self
-/// @param data
-/// @param octetCount
-/// @return
+/// @param _self udp connections client
+/// @param data datagram payload to send
+/// @param octetCount number of octets in data
+/// @return negative on error
 static int transportSend(void* _self, const uint8_t* data, size_t octetCount)
 {
     UdpConnectionsClient* self = (UdpConnectionsClient*) _self;
@@ -27,7 +28,7 @@ static int transportSend(void* _self, const uint8_t* data, size_t octetCount)
 
     fldOutStreamInit(&outStream, buf, 1210);
 
-    udpConnectionsSerializeClientOutPacketHeader(&outStream, self->connectionId, octetCount);
+    udpConnectionsSerializeClientOutPacketHeader(&outStream, self->connectionId, (uint16_t) octetCount);
 
     fldOutStreamWriteOctets(&outStream, data, octetCount);
 
@@ -35,9 +36,9 @@ static int transportSend(void* _self, const uint8_t* data, size_t octetCount)
 }
 
 /// Handle incoming Challenge Response from server
-/// @param self
-/// @param inStream
-/// @return
+/// @param self udp connections client
+/// @param inStream stream to read challenge from
+/// @return negative on error
 static int inChallenge(UdpConnectionsClient* self, FldInStream* inStream)
 {
     UdpConnectionsSerializeServerChallenge challenge;
@@ -49,10 +50,8 @@ static int inChallenge(UdpConnectionsClient* self, FldInStream* inStream)
     }
 
     if (nonce != self->nonce) {
-        CLOG_C_NOTICE(
-            &self->log,
-            "wrong nonce, it wasn't for me. received %016lX vs %016lX.",
-            nonce, self->nonce);
+        CLOG_C_NOTICE(&self->log, "wrong nonce, it wasn't for me. received %" PRIX64 " vs %" PRIX64 ".", nonce,
+                      self->nonce)
         return -2;
     }
 
@@ -64,16 +63,16 @@ static int inChallenge(UdpConnectionsClient* self, FldInStream* inStream)
     self->receivedServerChallenge = challenge;
     self->phase = UdpConnectionsClientPhaseConnect;
 
-    CLOG_C_DEBUG(&self->log, "received for nonce %016lX challenge secret %016lX from server", self->nonce,
+    CLOG_C_DEBUG(&self->log, "received for nonce %" PRIX64 " challenge secret %" PRIX64 " from server", self->nonce,
                  self->receivedServerChallenge)
 
     return 0;
 }
 
 /// Handle incoming connect response from server
-/// @param self
-/// @param inStream
-/// @return
+/// @param self udp connections client
+/// @param inStream connect info to read from
+/// @return negative on error
 static int inConnect(UdpConnectionsClient* self, FldInStream* inStream)
 {
     UdpConnectionsSerializeConnectionId connectionId;
@@ -85,8 +84,7 @@ static int inConnect(UdpConnectionsClient* self, FldInStream* inStream)
     }
 
     if (nonce != self->nonce) {
-        CLOG_C_NOTICE(&self->log, "wrong nonce received %016lX vs %016lX.",
-                      nonce, self->nonce);
+        CLOG_C_NOTICE(&self->log, "wrong nonce received %" PRIX64 " vs %" PRIX64 ".", nonce, self->nonce)
         return -2;
     }
 
@@ -98,40 +96,36 @@ static int inConnect(UdpConnectionsClient* self, FldInStream* inStream)
     self->connectionId = connectionId;
     self->phase = UdpConnectionsClientPhaseConnected;
 
-    CLOG_C_DEBUG(&self->log, "connection established from server for client nonce: %016lX connection %016lX", self->nonce,
-                 self->connectionId)
+    CLOG_C_DEBUG(&self->log, "connection established from server for client nonce: %" PRIX64 " connection %" PRIX64,
+                 self->nonce, self->connectionId)
 
     return 0;
 }
 
 /// Handle challenge or connection response from server.
-/// @param self
-/// @param inStream
-/// @param cmd
-/// @return
+/// @param self udp connections client
+/// @param inStream stream to read incoming datagrams from
+/// @param cmd UDP Connections Command
+/// @return negative on error
 static int handleInStream(UdpConnectionsClient* self, FldInStream* inStream, uint8_t cmd)
 {
     switch (cmd) {
         case UdpConnectionsSerializeCmdChallengeResponse:
             return inChallenge(self, inStream);
-            break;
         case UdpConnectionsSerializeCmdConnectResponse:
             return inConnect(self, inStream);
-            break;
         default:
-            CLOG_C_SOFT_ERROR(&self->log, "illegal cmd: %02X", cmd);
+            CLOG_C_SOFT_ERROR(&self->log, "illegal cmd: %02X", cmd)
             return -99;
     }
-
-    return 0;
 }
 
 /// Handle incoming packet from server to be read by the application
-/// @param self
-/// @param inStream
-/// @param buf
-/// @param maxDatagramSize
-/// @return
+/// @param self udp connections
+/// @param inStream stream to read packet from
+/// @param buf target buffer
+/// @param maxDatagramSize maximum octet size of buf
+/// @return negative on error
 static int inPacket(UdpConnectionsClient* self, FldInStream* inStream, uint8_t* buf, size_t maxDatagramSize)
 {
     UdpConnectionsSerializeConnectionId connectionId;
@@ -149,8 +143,8 @@ static int inPacket(UdpConnectionsClient* self, FldInStream* inStream, uint8_t* 
     }
 
     if (connectionId != self->connectionId) {
-        CLOG_C_SOFT_ERROR(&self->log, "wrong connectionId, probably for someone else received %016lX vs %016lX",
-                          connectionId, self->connectionId);
+        CLOG_C_SOFT_ERROR(&self->log, "wrong connectionId, probably for someone else received %" PRIX64 " vs %" PRIX64,
+                          connectionId, self->connectionId)
         return -2;
     }
 
@@ -169,15 +163,15 @@ static int inPacket(UdpConnectionsClient* self, FldInStream* inStream, uint8_t* 
 
 /// Udp Connections receive
 /// Reads packet from underlying transport and checks what type of message it is.
-/// @param _self
-/// @param data
-/// @param maxOctetCount
-/// @return
+/// @param _self udp connections client
+/// @param data target octet buffer
+/// @param maxOctetCount maximum octets in data
+/// @return negative on error
 static ssize_t transportReceive(void* _self, uint8_t* data, size_t maxOctetCount)
 {
     UdpConnectionsClient* self = (UdpConnectionsClient*) _self;
 
-    int octetsFound = datagramTransportReceive(&self->underlyingTransport, data, maxOctetCount);
+    ssize_t octetsFound = datagramTransportReceive(&self->underlyingTransport, data, maxOctetCount);
     if (octetsFound <= 0) {
         return octetsFound;
     }
@@ -187,7 +181,7 @@ static ssize_t transportReceive(void* _self, uint8_t* data, size_t maxOctetCount
     }
 
     FldInStream inStream;
-    fldInStreamInit(&inStream, data, octetsFound);
+    fldInStreamInit(&inStream, data, (size_t) octetsFound);
 
     uint8_t cmd;
     fldInStreamReadUInt8(&inStream, &cmd);
@@ -208,10 +202,10 @@ static ssize_t transportReceive(void* _self, uint8_t* data, size_t maxOctetCount
 }
 
 /// Initializes the Udp Connections Client
-/// @param self
-/// @param transport
-/// @param log
-/// @return
+/// @param self udp connections client
+/// @param transport transport to use
+/// @param log log target
+/// @return negative on error
 int udpConnectionsClientInit(UdpConnectionsClient* self, DatagramTransport transport, Clog log)
 {
     self->log = log;
@@ -225,36 +219,36 @@ int udpConnectionsClientInit(UdpConnectionsClient* self, DatagramTransport trans
     self->transport.send = transportSend;
     self->transport.receive = transportReceive;
 
-    CLOG_C_DEBUG(&self->log, "randomized nonce %016lX", self->nonce)
+    CLOG_C_DEBUG(&self->log, "randomized nonce %" PRIX64, self->nonce)
     return 0;
 }
 
 /// Sends challenge request to the server
-/// @param self
-/// @param outStream
-/// @return
+/// @param self udp connections client
+/// @param outStream stream to write challenge to
+/// @return negative on error
 static int outChallenge(UdpConnectionsClient* self, FldOutStream* outStream)
 {
-    CLOG_C_DEBUG(&self->log, "sending challenge request to server %016lX", self->nonce)
+    CLOG_C_DEBUG(&self->log, "sending challenge request to server %" PRIX64, self->nonce)
     self->waitTime = 5;
     return udpConnectionsSerializeClientOutChallenge(outStream, self->nonce);
 }
 
 /// Sends connect request to server
-/// @param self
-/// @param outStream
-/// @return
+/// @param self udp connections client
+/// @param outStream write connection info to stream
+/// @return negative on error
 static int outConnect(UdpConnectionsClient* self, FldOutStream* outStream)
 {
-    CLOG_C_DEBUG(&self->log, "sending connect request to server %016lX secretChallenge:%016lX", self->nonce,
+    CLOG_C_DEBUG(&self->log, "sending connect request to server %" PRIX64 " secretChallenge:%" PRIX64, self->nonce,
                  self->receivedServerChallenge)
     self->waitTime = 5;
     return udpConnectionsSerializeClientOutConnect(outStream, self->nonce, self->receivedServerChallenge);
 }
 
 /// Send challenge- or connect request packet to underlying transport if needed
-/// @param self
-/// @return
+/// @param self udp connections client
+/// @return negative on error
 static int sendPacket(UdpConnectionsClient* self)
 {
     if (self->waitTime > 0) {
@@ -279,8 +273,7 @@ static int sendPacket(UdpConnectionsClient* self)
         case UdpConnectionsClientPhaseConnected:
             // intentionally do nothing
             break;
-        default:
-            CLOG_C_ERROR(&self->log, "Unknown phase %d", self->phase)
+        case UdpConnectionsClientPhaseIdle:
             break;
     }
 
@@ -297,8 +290,8 @@ static int sendPacket(UdpConnectionsClient* self)
 }
 
 /// Sends packet if needed
-/// @param self
-/// @return
+/// @param self udp connections client
+/// @return negative on error
 int udpConnectionsClientUpdate(UdpConnectionsClient* self)
 {
     return sendPacket(self);
