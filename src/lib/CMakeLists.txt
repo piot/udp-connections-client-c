@@ -62,15 +62,10 @@ if(isDebug)
 endif()
 
 
-function(unixlike)
-endfunction()
-
 if(OS_LINUX)
   message("Linux Detected!")
-  unixlike()
 elseif(OS_MACOS)
   message("MacOS detected!")
-  unixlike()
 elseif(OS_WINDOWS)
   message("Windows detected!")
 endif()
@@ -88,6 +83,7 @@ if(COMPILER_CLANG)
             -Wno-unsafe-buffer-usage # unclear why it fails on clang-16
             -Wno-unknown-warning-option # support newer clang versions, e.g. clang-16
             -Wno-disabled-macro-expansion # bug in emscripten compiler?
+            -Wno-poison-system-directories # might be bug in emscripten compiler?
             ${sanitizers})
 elseif(COMPILER_GCC)
 target_compile_options(
@@ -124,8 +120,4 @@ endif()
 if(NOT isDebug)
   message("optimize!")
   target_compile_options(udp-connections-client PRIVATE -O3)
-endif()
-
-if (NOT MSVC)
-target_link_libraries(udp-connections-client PRIVATE m)
 endif()
