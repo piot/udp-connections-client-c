@@ -11,6 +11,6 @@ CMakeFiles/
 build/
 Makefile
 *.a
-*.cmake
 CMakeCache.txt
 src/examples/udp_connections_client_cli
+cmake_install.cmake
