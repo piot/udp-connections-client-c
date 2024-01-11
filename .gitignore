@@ -14,3 +14,4 @@ Makefile
 CMakeCache.txt
 src/examples/udp_connections_client_cli
 cmake_install.cmake
+src/lib/CTestTestfile.cmake
